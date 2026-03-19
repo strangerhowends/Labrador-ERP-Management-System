@@ -10,13 +10,28 @@ function getEnv(name: string, fallback?: string): string {
   return value;
 }
 
+function getEnvAny(names: string[], fallback?: string): string {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value !== undefined) {
+      return value;
+    }
+  }
+
+  if (fallback !== undefined) {
+    return fallback;
+  }
+
+  throw new Error(`Missing required env var: ${names.join(" or ")}`);
+}
+
 export const env = {
   port: Number(getEnv("PORT", "4000")),
-  dbHost: getEnv("DB_HOST", "localhost"),
-  dbPort: Number(getEnv("DB_PORT", "5432")),
-  dbName: getEnv("DB_NAME", "labrador_db"),
-  dbUser: getEnv("DB_USER", "postgres"),
-  dbPassword: getEnv("DB_PASSWORD"),
+  dbHost: getEnvAny(["DB_HOST", "PGHOST"], "localhost"),
+  dbPort: Number(getEnvAny(["DB_PORT", "PGPORT"], "5432")),
+  dbName: getEnvAny(["DB_NAME", "PGDATABASE"], "labrador_db"),
+  dbUser: getEnvAny(["DB_USER", "PGUSER"], "postgres"),
+  dbPassword: getEnvAny(["DB_PASSWORD", "PGPASSWORD"]),
   dbSsl: String(getEnv("DB_SSL", "false")).toLowerCase() === "true",
   securityKeySave: getEnv("SECURITY_KEY_SAVE"),
   jwtSecret: getEnv("JWT_SECRET", "labrador-jwt-secret-change-me"),
