@@ -113,7 +113,7 @@ export function RegistroPago() {
       [id]: prev[id] ?? {
         tipo_pago: "Sueldo",
         observaciones: "",
-        dailyAmounts: {},
+        dailyDetails: {},
       },
     }));
   }
@@ -359,18 +359,18 @@ export function RegistroPago() {
             type="button"
             onClick={() => void loadAttendancePreview()}
             disabled={loadingPreview}
-            className="w-full rounded-xl border border-sage-600 bg-sage-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sage-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl border border-ink-900 bg-ink-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loadingPreview ? "Cargando..." : "Cargar Asistencia"}
           </button>
         </div>
       </div>
 
-      <div className="mt-5 rounded-2xl border border-sand-200 bg-sand-50 p-4">
+      <div className="mt-5 rounded-2xl border border-sand-200 bg-sand-50/70 p-4">
         <p className="text-sm font-semibold text-ink-900">Trabajadores ({periodicidad === "SEMANAL" ? "Semanal" : "Mensual"})</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {trabajadoresFiltrados.map((item) => (
-            <label key={item.id} className="flex items-center gap-2 rounded-xl border border-sand-200 bg-white px-3 py-2 text-sm text-ink-800">
+            <label key={item.id} className="flex items-center gap-2 rounded-xl border border-sand-200 bg-white px-3 py-2 text-sm text-ink-800 transition hover:border-ink-300 hover:bg-sand-50">
               <input
                 type="checkbox"
                 checked={selectedTrabajadorIds.includes(item.id)}
@@ -405,10 +405,10 @@ export function RegistroPago() {
             }, 0);
 
             return (
-              <article key={worker.trabajador_id} className="rounded-2xl border border-sand-200 bg-white p-4">
+              <article key={worker.trabajador_id} className="rounded-2xl border border-sand-200 bg-white p-4 shadow-[0_8px_24px_-20px_rgba(18,21,17,0.5)]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-ink-950">{worker.trabajador_nombre}</p>
-                  <p className="text-sm font-semibold text-sage-700">Total: {money.format(totalTrabajador)}</p>
+                  <p className="text-sm font-semibold text-ink-900">Total: {money.format(totalTrabajador)}</p>
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -438,7 +438,7 @@ export function RegistroPago() {
 
                 <div className="mt-3 overflow-x-auto rounded-xl border border-sand-200">
                   <table className="min-w-full text-xs sm:text-sm">
-                    <thead className="bg-sand-50 text-ink-700">
+                    <thead className="bg-sand-100/80 text-ink-700">
                       <tr>
                         <th className="px-2 py-2 text-left">Fecha</th>
                         <th className="px-2 py-2 text-left">Asistencia</th>
@@ -464,7 +464,7 @@ export function RegistroPago() {
                                 <span
                                   className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
                                     day.trabajo_programado
-                                      ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                                      ? "border border-ink-300 bg-ink-100 text-ink-700"
                                       : "border border-sand-200 bg-sand-50 text-ink-500"
                                   }`}
                                 >
@@ -524,20 +524,20 @@ export function RegistroPago() {
                                   )}
                                 </label>
                               </td>
-                              <td className="px-2 py-2 text-center text-xs sm:text-sm font-semibold text-sage-700">
+                              <td className="px-2 py-2 text-center text-xs sm:text-sm font-semibold text-ink-900">
                                 {money.format(totalDia)}
                               </td>
                             </tr>
                             {(detail.extra_habilitado && Number(detail.extra_monto ?? "0") > 0) && (
-                              <tr className="bg-amber-50 border-t border-sand-100">
+                              <tr className="bg-sand-50 border-t border-sand-100">
                                 <td colSpan={6} className="px-2 py-2">
                                   <label className="text-xs sm:text-sm">
-                                    <span className="block mb-1 font-medium text-amber-900">Motivo del Extra</span>
+                                    <span className="block mb-1 font-medium text-ink-900">Motivo del Extra</span>
                                     <input
                                       type="text"
                                       value={detail.extra_motivo}
                                       onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { extra_motivo: e.target.value })}
-                                      className="w-full rounded-lg border border-amber-200 px-2 py-1 text-xs text-ink-900"
+                                      className="w-full rounded-lg border border-sand-200 px-2 py-1 text-xs text-ink-900"
                                       placeholder="ej: Cobertura de falta, Jornada doble, etc."
                                     />
                                   </label>
@@ -545,15 +545,15 @@ export function RegistroPago() {
                               </tr>
                             )}
                             {(detail.descuento_habilitado && Number(detail.descuento_monto ?? "0") > 0) && (
-                              <tr className="bg-red-50 border-t border-sand-100">
+                              <tr className="bg-sand-50 border-t border-sand-100">
                                 <td colSpan={6} className="px-2 py-2">
                                   <label className="text-xs sm:text-sm">
-                                    <span className="block mb-1 font-medium text-red-900">Motivo del Descuento</span>
+                                    <span className="block mb-1 font-medium text-ink-900">Motivo del Descuento</span>
                                     <input
                                       type="text"
                                       value={detail.descuento_motivo}
                                       onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { descuento_motivo: e.target.value })}
-                                      className="w-full rounded-lg border border-red-200 px-2 py-1 text-xs text-ink-900"
+                                      className="w-full rounded-lg border border-sand-200 px-2 py-1 text-xs text-ink-900"
                                       placeholder="ej: Falta, Impuntualidad, Daño material, etc."
                                     />
                                   </label>
@@ -577,7 +577,7 @@ export function RegistroPago() {
           <h3 className="mb-3 text-lg font-semibold text-ink-950">Resumen de Liquidación</h3>
           <div className="overflow-x-auto rounded-xl border border-sand-200">
             <table className="min-w-full text-sm">
-              <thead className="bg-sage-50 text-ink-700">
+              <thead className="bg-sand-100/80 text-ink-700">
                 <tr>
                   <th className="px-4 py-3 text-left font-semibold">Trabajador</th>
                   <th className="px-4 py-3 text-right font-semibold">Base (PEN)</th>
@@ -626,18 +626,18 @@ export function RegistroPago() {
                           <tr key={worker.trabajador_id} className="border-t border-sand-100">
                             <td className="px-4 py-3">{worker.trabajador_nombre}</td>
                             <td className="px-4 py-3 text-right">{money.format(workerBase)}</td>
-                            <td className="px-4 py-3 text-right text-emerald-700 font-medium">+{money.format(workerExtra)}</td>
-                            <td className="px-4 py-3 text-right text-red-700 font-medium">-{money.format(workerDescuento)}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-sage-700">{money.format(workerNeto)}</td>
+                            <td className="px-4 py-3 text-right font-medium text-ink-700">+{money.format(workerExtra)}</td>
+                            <td className="px-4 py-3 text-right font-medium text-ink-700">-{money.format(workerDescuento)}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-ink-900">{money.format(workerNeto)}</td>
                           </tr>
                         );
                       })}
-                      <tr className="border-t-2 border-sage-300 bg-sage-50">
+                      <tr className="border-t-2 border-sand-300 bg-sand-50">
                         <td className="px-4 py-3 font-semibold text-ink-950">TOTAL</td>
                         <td className="px-4 py-3 text-right font-semibold text-ink-950">{money.format(totalBase)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-emerald-700">+{money.format(totalExtra)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-red-700">-{money.format(totalDescuento)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-sage-900 text-lg">
+                        <td className="px-4 py-3 text-right font-semibold text-ink-900">+{money.format(totalExtra)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-ink-900">-{money.format(totalDescuento)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-ink-950 text-lg">
                           {money.format(totalBase + totalExtra - totalDescuento)}
                         </td>
                       </tr>
@@ -654,7 +654,7 @@ export function RegistroPago() {
         type="button"
         onClick={() => void handleSaveBatch()}
         disabled={isSaving}
-        className="mt-5 rounded-xl bg-sage-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sage-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-5 rounded-xl bg-ink-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {isSaving ? "Guardando..." : "Registrar Pagos por Rango"}
       </button>
