@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { authHeaders } from "../../context/AuthContext";
 import {
   API_URL,
@@ -14,10 +14,20 @@ const money = new Intl.NumberFormat("es-PE", {
   maximumFractionDigits: 2,
 });
 
+type DayDetail = {
+  monto: string;
+  extra_habilitado: boolean;
+  extra_monto: string;
+  extra_motivo: string;
+  descuento_habilitado: boolean;
+  descuento_monto: string;
+  descuento_motivo: string;
+};
+
 type PagoDraft = {
   tipo_pago: TipoPago;
   observaciones: string;
-  dailyAmounts: Record<string, string>;
+  dailyDetails: Record<string, DayDetail>;
 };
 
 function todayISO() {
@@ -114,23 +124,39 @@ export function RegistroPago() {
       [id]: {
         tipo_pago: prev[id]?.tipo_pago ?? "Sueldo",
         observaciones: prev[id]?.observaciones ?? "",
-        dailyAmounts: prev[id]?.dailyAmounts ?? {},
+        dailyDetails: prev[id]?.dailyDetails ?? {},
         ...patch,
       },
     }));
   }
 
-  function updateMontoDia(workerId: string, date: string, value: string) {
+  function getDefaultDayDetail(): DayDetail {
+    return {
+      monto: "",
+      extra_habilitado: false,
+      extra_monto: "",
+      extra_motivo: "",
+      descuento_habilitado: false,
+      descuento_monto: "",
+      descuento_motivo: "",
+    };
+  }
+
+  function updateDayDetail(workerId: string, date: string, patch: Partial<DayDetail>) {
     const draft = pagos[workerId] ?? {
       tipo_pago: "Sueldo" as TipoPago,
       observaciones: "",
-      dailyAmounts: {},
+      dailyDetails: {},
     };
 
     updatePago(workerId, {
-      dailyAmounts: {
-        ...draft.dailyAmounts,
-        [date]: value,
+      dailyDetails: {
+        ...draft.dailyDetails,
+        [date]: {
+          ...getDefaultDayDetail(),
+          ...draft.dailyDetails[date],
+          ...patch,
+        },
       },
     });
   }
@@ -178,7 +204,7 @@ export function RegistroPago() {
           next[worker.trabajador_id] = {
             tipo_pago: next[worker.trabajador_id]?.tipo_pago ?? "Sueldo",
             observaciones: next[worker.trabajador_id]?.observaciones ?? "",
-            dailyAmounts: next[worker.trabajador_id]?.dailyAmounts ?? {},
+            dailyDetails: next[worker.trabajador_id]?.dailyDetails ?? {},
           };
         }
         return next;
@@ -205,13 +231,29 @@ export function RegistroPago() {
       let count = 0;
 
       for (const worker of preview.trabajadores) {
-        const draft = pagos[worker.trabajador_id] ?? { tipo_pago: "Sueldo" as TipoPago, observaciones: "", dailyAmounts: {} };
-        const total = worker.dias.reduce((acc, day) => {
-          const amount = Number(draft.dailyAmounts[day.fecha] ?? "0");
-          return acc + (Number.isNaN(amount) ? 0 : amount);
-        }, 0);
+        const draft = pagos[worker.trabajador_id] ?? { tipo_pago: "Sueldo" as TipoPago, observaciones: "", dailyDetails: {} };
+        
+        let totalMonto = 0;
+        let observacionesDetalle = "";
 
-        if (total <= 0) {
+        for (const day of worker.dias) {
+          const dayDetail = draft.dailyDetails[day.fecha] ?? getDefaultDayDetail();
+          const monto = Number(dayDetail.monto ?? "0");
+          const extra = Number(dayDetail.extra_monto ?? "0");
+          const descuento = Number(dayDetail.descuento_monto ?? "0");
+          
+          const total = monto + extra - descuento;
+          totalMonto += Number.isNaN(total) ? 0 : total;
+
+          if (dayDetail.extra_habilitado && extra > 0) {
+            observacionesDetalle += `[${day.fecha} Extra: ${extra} - ${dayDetail.extra_motivo}] `;
+          }
+          if (dayDetail.descuento_habilitado && descuento > 0) {
+            observacionesDetalle += `[${day.fecha} Descuento: ${descuento} - ${dayDetail.descuento_motivo}] `;
+          }
+        }
+
+        if (totalMonto <= 0) {
           continue;
         }
 
@@ -220,12 +262,13 @@ export function RegistroPago() {
           headers: authHeaders(),
           body: JSON.stringify({
             trabajador_id: worker.trabajador_id,
-            monto_pagado: Number(total.toFixed(2)),
+            monto_pagado: Number(totalMonto.toFixed(2)),
             fecha_pago: fechaFin,
             tipo_pago: draft.tipo_pago,
             observaciones: [
               periodicidad === "SEMANAL" ? "Pago semanal" : "Pago mensual",
               `Rango ${fechaInicio} a ${fechaFin}`,
+              observacionesDetalle.trim() || null,
               draft.observaciones?.trim() || null,
             ].filter(Boolean).join(" | "),
           }),
@@ -334,12 +377,16 @@ export function RegistroPago() {
             const draft = pagos[worker.trabajador_id] ?? {
               tipo_pago: "Sueldo" as TipoPago,
               observaciones: "",
-              dailyAmounts: {},
+              dailyDetails: {},
             };
 
             const totalTrabajador = worker.dias.reduce((acc, day) => {
-              const value = Number(draft.dailyAmounts[day.fecha] ?? "0");
-              return acc + (Number.isNaN(value) ? 0 : value);
+              const detail = draft.dailyDetails[day.fecha] ?? getDefaultDayDetail();
+              const monto = Number(detail.monto ?? "0");
+              const extra = Number(detail.extra_monto ?? "0");
+              const descuento = Number(detail.descuento_monto ?? "0");
+              const total = (monto || 0) + (extra || 0) - (descuento || 0);
+              return acc + (Number.isNaN(total) ? 0 : total);
             }, 0);
 
             return (
@@ -375,42 +422,132 @@ export function RegistroPago() {
                 </div>
 
                 <div className="mt-3 overflow-x-auto rounded-xl border border-sand-200">
-                  <table className="min-w-full text-sm">
+                  <table className="min-w-full text-xs sm:text-sm">
                     <thead className="bg-sand-50 text-ink-700">
                       <tr>
-                        <th className="px-3 py-2 text-left">Fecha</th>
-                        <th className="px-3 py-2 text-left">Asistencia</th>
-                        <th className="px-3 py-2 text-left">Monto Dia</th>
+                        <th className="px-2 py-2 text-left">Fecha</th>
+                        <th className="px-2 py-2 text-left">Asistencia</th>
+                        <th className="px-2 py-2 text-center">Monto</th>
+                        <th className="px-2 py-2 text-center">Extra</th>
+                        <th className="px-2 py-2 text-center">Descto</th>
+                        <th className="px-2 py-2 text-center">Total Día</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {worker.dias.map((day) => (
-                        <tr key={day.fecha} className="border-t border-sand-100">
-                          <td className="px-3 py-2">{day.fecha}</td>
-                          <td className="px-3 py-2">
-                            <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                day.trabajo_programado
-                                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border border-sand-200 bg-sand-50 text-ink-500"
-                              }`}
-                            >
-                              {day.trabajo_programado ? "Trabajo" : "No trabajo"}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={draft.dailyAmounts[day.fecha] ?? ""}
-                              onChange={(e) => updateMontoDia(worker.trabajador_id, day.fecha, e.target.value)}
-                              className="w-40 rounded-lg border border-sand-200 px-2 py-1 text-ink-900"
-                              placeholder="0.00"
-                            />
-                          </td>
-                        </tr>
-                      ))}
+                      {worker.dias.map((day) => {
+                        const detail = draft.dailyDetails[day.fecha] ?? getDefaultDayDetail();
+                        const monto = Number(detail.monto ?? "0") || 0;
+                        const extra = Number(detail.extra_monto ?? "0") || 0;
+                        const descuento = Number(detail.descuento_monto ?? "0") || 0;
+                        const totalDia = monto + extra - descuento;
+
+                        return (
+                          <React.Fragment key={day.fecha}>
+                            <tr className="border-t border-sand-100">
+                              <td className="px-2 py-2 text-xs sm:text-sm">{day.fecha}</td>
+                              <td className="px-2 py-2">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                    day.trabajo_programado
+                                      ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                                      : "border border-sand-200 bg-sand-50 text-ink-500"
+                                  }`}
+                                >
+                                  {day.trabajo_programado ? "Sí" : "No"}
+                                </span>
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={detail.monto}
+                                  onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { monto: e.target.value })}
+                                  className="w-20 rounded-lg border border-sand-200 px-2 py-1 text-xs sm:text-sm text-ink-900"
+                                  placeholder="0"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <label className="flex items-center gap-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={detail.extra_habilitado}
+                                    onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { extra_habilitado: e.target.checked })}
+                                    className="h-3 w-3 rounded border-sand-300"
+                                  />
+                                  {detail.extra_habilitado && (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={detail.extra_monto}
+                                      onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { extra_monto: e.target.value })}
+                                      className="w-16 rounded-lg border border-sand-200 px-1 py-1 text-xs text-ink-900"
+                                      placeholder="0"
+                                    />
+                                  )}
+                                </label>
+                              </td>
+                              <td className="px-2 py-2">
+                                <label className="flex items-center gap-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={detail.descuento_habilitado}
+                                    onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { descuento_habilitado: e.target.checked })}
+                                    className="h-3 w-3 rounded border-sand-300"
+                                  />
+                                  {detail.descuento_habilitado && (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={detail.descuento_monto}
+                                      onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { descuento_monto: e.target.value })}
+                                      className="w-16 rounded-lg border border-sand-200 px-1 py-1 text-xs text-ink-900"
+                                      placeholder="0"
+                                    />
+                                  )}
+                                </label>
+                              </td>
+                              <td className="px-2 py-2 text-center text-xs sm:text-sm font-semibold text-sage-700">
+                                {money.format(totalDia)}
+                              </td>
+                            </tr>
+                            {(detail.extra_habilitado && Number(detail.extra_monto ?? "0") > 0) && (
+                              <tr className="bg-amber-50 border-t border-sand-100">
+                                <td colSpan={6} className="px-2 py-2">
+                                  <label className="text-xs sm:text-sm">
+                                    <span className="block mb-1 font-medium text-amber-900">Motivo del Extra</span>
+                                    <input
+                                      type="text"
+                                      value={detail.extra_motivo}
+                                      onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { extra_motivo: e.target.value })}
+                                      className="w-full rounded-lg border border-amber-200 px-2 py-1 text-xs text-ink-900"
+                                      placeholder="ej: Cobertura de falta, Jornada doble, etc."
+                                    />
+                                  </label>
+                                </td>
+                              </tr>
+                            )}
+                            {(detail.descuento_habilitado && Number(detail.descuento_monto ?? "0") > 0) && (
+                              <tr className="bg-red-50 border-t border-sand-100">
+                                <td colSpan={6} className="px-2 py-2">
+                                  <label className="text-xs sm:text-sm">
+                                    <span className="block mb-1 font-medium text-red-900">Motivo del Descuento</span>
+                                    <input
+                                      type="text"
+                                      value={detail.descuento_motivo}
+                                      onChange={(e) => updateDayDetail(worker.trabajador_id, day.fecha, { descuento_motivo: e.target.value })}
+                                      className="w-full rounded-lg border border-red-200 px-2 py-1 text-xs text-ink-900"
+                                      placeholder="ej: Falta, Impuntualidad, Daño material, etc."
+                                    />
+                                  </label>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
