@@ -78,33 +78,72 @@ export function MisPagos() {
         ))}
       </div>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-6 space-y-4">
         {data.map((row) => (
           <details key={`d-${row.semana_del_anio}`} className="rounded-2xl border border-sand-200 bg-white p-4" open>
             <summary className="cursor-pointer list-none text-sm font-semibold text-ink-900">
               Semana {row.semana_del_anio} - Total {money.format(row.total_semana)}
             </summary>
-            <div className="mt-3 overflow-x-auto rounded-xl border border-sand-200">
-              <table className="min-w-full text-sm">
-                <thead className="bg-sand-50 text-ink-700">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Fecha</th>
-                    <th className="px-3 py-2 text-left">Tipo</th>
-                    <th className="px-3 py-2 text-left">Monto</th>
-                    <th className="px-3 py-2 text-left">Observaciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {row.pagos.map((pago) => (
-                    <tr key={pago.pago_id} className="border-t border-sand-100">
-                      <td className="px-3 py-2">{pago.fecha_pago}</td>
-                      <td className="px-3 py-2">{pago.tipo_pago}</td>
-                      <td className="px-3 py-2">{money.format(pago.monto_pagado)}</td>
-                      <td className="px-3 py-2">{pago.observaciones ?? "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-4 space-y-3">
+              {row.pagos.map((pago) => {
+                // Parsear observaciones para extraer base, extras, descuentos
+                const obs = pago.observaciones ?? "";
+                const baseMatch = obs.match(/Base:\s?([\d.]+)/);
+                const extrasMatch = obs.match(/Extras:\s?\+?([\d.]+)/);
+                const descuentosMatch = obs.match(/Descuentos:\s?-?([\d.]+)/);
+
+                const base = baseMatch ? parseFloat(baseMatch[1]) : 0;
+                const extras = extrasMatch ? parseFloat(extrasMatch[1]) : 0;
+                const descuentos = descuentosMatch ? parseFloat(descuentosMatch[1]) : 0;
+
+                return (
+                  <article key={pago.pago_id} className="rounded-xl border border-sand-200 bg-sand-50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <div>
+                        <p className="text-xs text-ink-600">Fecha de pago</p>
+                        <p className="font-semibold text-ink-950">{pago.fecha_pago}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-ink-600">Tipo de pago</p>
+                        <p className="font-semibold text-sage-700">{pago.tipo_pago}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-3 mb-3">
+                      <div className="rounded-lg border border-sand-300 bg-white px-3 py-2">
+                        <p className="text-xs text-ink-600">Base</p>
+                        <p className="text-lg font-semibold text-ink-950">{money.format(base)}</p>
+                      </div>
+                      {extras > 0 && (
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                          <p className="text-xs text-emerald-700">+ Extras</p>
+                          <p className="text-lg font-semibold text-emerald-700">+{money.format(extras)}</p>
+                        </div>
+                      )}
+                      {descuentos > 0 && (
+                        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                          <p className="text-xs text-red-700">- Descuentos</p>
+                          <p className="text-lg font-semibold text-red-700">-{money.format(descuentos)}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border-2 border-sage-300 bg-sage-50 px-3 py-2 mb-3">
+                      <p className="text-xs text-sage-700">TOTAL A RECIBIR</p>
+                      <p className="text-2xl font-bold text-sage-900">{money.format(pago.monto_pagado)}</p>
+                    </div>
+
+                    {pago.observaciones && (
+                      <details className="cursor-pointer">
+                        <summary className="text-xs font-medium text-ink-600 hover:text-ink-800">Ver detalles completos</summary>
+                        <p className="mt-2 text-xs text-ink-700 whitespace-pre-wrap break-words bg-white rounded-lg p-2 border border-sand-200">
+                          {pago.observaciones}
+                        </p>
+                      </details>
+                    )}
+                  </article>
+                );
+              })}
             </div>
           </details>
         ))}

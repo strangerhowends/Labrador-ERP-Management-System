@@ -234,7 +234,11 @@ export function RegistroPago() {
         const draft = pagos[worker.trabajador_id] ?? { tipo_pago: "Sueldo" as TipoPago, observaciones: "", dailyDetails: {} };
         
         let totalMonto = 0;
-        let observacionesDetalle = "";
+        let totalBase = 0;
+        let totalExtra = 0;
+        let totalDescuento = 0;
+        const detallesExtras: string[] = [];
+        const detallesDescuentos: string[] = [];
 
         for (const day of worker.dias) {
           const dayDetail = draft.dailyDetails[day.fecha] ?? getDefaultDayDetail();
@@ -244,18 +248,30 @@ export function RegistroPago() {
           
           const total = monto + extra - descuento;
           totalMonto += Number.isNaN(total) ? 0 : total;
+          totalBase += monto;
+          totalExtra += extra;
+          totalDescuento += descuento;
 
           if (dayDetail.extra_habilitado && extra > 0) {
-            observacionesDetalle += `[${day.fecha} Extra: ${extra} - ${dayDetail.extra_motivo}] `;
+            detallesExtras.push(`${extra.toFixed(2)} (${day.fecha}: ${dayDetail.extra_motivo})`);
           }
           if (dayDetail.descuento_habilitado && descuento > 0) {
-            observacionesDetalle += `[${day.fecha} Descuento: ${descuento} - ${dayDetail.descuento_motivo}] `;
+            detallesDescuentos.push(`${descuento.toFixed(2)} (${day.fecha}: ${dayDetail.descuento_motivo})`);
           }
         }
 
         if (totalMonto <= 0) {
           continue;
         }
+
+        const observacionesParts = [
+          `Base: ${totalBase.toFixed(2)}`,
+          totalExtra > 0 ? `Extras: +${totalExtra.toFixed(2)}` : null,
+          totalDescuento > 0 ? `Descuentos: -${totalDescuento.toFixed(2)}` : null,
+          detallesExtras.length > 0 ? `Detalle extras: ${detallesExtras.join(", ")}` : null,
+          detallesDescuentos.length > 0 ? `Detalle descuentos: ${detallesDescuentos.join(", ")}` : null,
+          draft.observaciones?.trim() || null,
+        ].filter(Boolean);
 
         const res = await fetch(`${API_URL}/remuneraciones`, {
           method: "POST",
@@ -268,9 +284,8 @@ export function RegistroPago() {
             observaciones: [
               periodicidad === "SEMANAL" ? "Pago semanal" : "Pago mensual",
               `Rango ${fechaInicio} a ${fechaFin}`,
-              observacionesDetalle.trim() || null,
-              draft.observaciones?.trim() || null,
-            ].filter(Boolean).join(" | "),
+              ...observacionesParts,
+            ].join(" | "),
           }),
         });
 
@@ -554,6 +569,84 @@ export function RegistroPago() {
               </article>
             );
           })}
+        </div>
+      )}
+
+      {preview && (
+        <div className="mt-6">
+          <h3 className="mb-3 text-lg font-semibold text-ink-950">Resumen de Liquidación</h3>
+          <div className="overflow-x-auto rounded-xl border border-sand-200">
+            <table className="min-w-full text-sm">
+              <thead className="bg-sage-50 text-ink-700">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold">Trabajador</th>
+                  <th className="px-4 py-3 text-right font-semibold">Base (PEN)</th>
+                  <th className="px-4 py-3 text-right font-semibold">Extras (PEN)</th>
+                  <th className="px-4 py-3 text-right font-semibold">Descuentos (PEN)</th>
+                  <th className="px-4 py-3 text-right font-semibold">Neto (PEN)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  let totalBase = 0,
+                    totalExtra = 0,
+                    totalDescuento = 0;
+
+                  return (
+                    <>
+                      {preview.trabajadores.map((worker) => {
+                        const draft = pagos[worker.trabajador_id] ?? {
+                          tipo_pago: "Sueldo" as TipoPago,
+                          observaciones: "",
+                          dailyDetails: {},
+                        };
+
+                        let workerBase = 0,
+                          workerExtra = 0,
+                          workerDescuento = 0;
+
+                        for (const day of worker.dias) {
+                          const detail = draft.dailyDetails[day.fecha] ?? getDefaultDayDetail();
+                          const base = Number(detail.monto ?? "0") || 0;
+                          const extra = Number(detail.extra_monto ?? "0") || 0;
+                          const descuento = Number(detail.descuento_monto ?? "0") || 0;
+
+                          workerBase += base;
+                          workerExtra += extra;
+                          workerDescuento += descuento;
+                        }
+
+                        totalBase += workerBase;
+                        totalExtra += workerExtra;
+                        totalDescuento += workerDescuento;
+
+                        const workerNeto = workerBase + workerExtra - workerDescuento;
+
+                        return (
+                          <tr key={worker.trabajador_id} className="border-t border-sand-100">
+                            <td className="px-4 py-3">{worker.trabajador_nombre}</td>
+                            <td className="px-4 py-3 text-right">{money.format(workerBase)}</td>
+                            <td className="px-4 py-3 text-right text-emerald-700 font-medium">+{money.format(workerExtra)}</td>
+                            <td className="px-4 py-3 text-right text-red-700 font-medium">-{money.format(workerDescuento)}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-sage-700">{money.format(workerNeto)}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="border-t-2 border-sage-300 bg-sage-50">
+                        <td className="px-4 py-3 font-semibold text-ink-950">TOTAL</td>
+                        <td className="px-4 py-3 text-right font-semibold text-ink-950">{money.format(totalBase)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-700">+{money.format(totalExtra)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-red-700">-{money.format(totalDescuento)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-sage-900 text-lg">
+                          {money.format(totalBase + totalExtra - totalDescuento)}
+                        </td>
+                      </tr>
+                    </>
+                  );
+                })()}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
