@@ -25,6 +25,10 @@ import {
   getProveedores,
   getResumenRemuneracionesSemanales,
   getResumenRemuneracionesPorTrabajador,
+  getPreviewProcesoPagoSemanal,
+  getPreviewAsistenciaRango,
+  addProcesoPagoSemanal,
+  getProcesosPagoSemanal,
   getTrabajadores,
   removeRemuneracion,
   saveHorario,
@@ -303,6 +307,67 @@ export async function getRemuneracionesSemanalController(req: AuthenticatedReque
     } else {
       res.json(await getResumenRemuneracionesSemanales());
     }
+  } catch (error) {
+    handleError(res, error, 500);
+  }
+}
+
+export async function getPreviewProcesoPagoSemanalController(req: Request, res: Response) {
+  try {
+    const fechaInicio = typeof req.query.fecha_inicio_semana === "string" ? req.query.fecha_inicio_semana : "";
+    const rawIds = typeof req.query.trabajador_ids === "string" ? req.query.trabajador_ids : "";
+    const trabajador_ids = rawIds
+      ? rawIds.split(",").map((id) => id.trim()).filter((id) => id.length > 0)
+      : undefined;
+
+    res.json(await getPreviewProcesoPagoSemanal({
+      fecha_inicio_semana: fechaInicio,
+      trabajador_ids,
+    }));
+  } catch (error) {
+    handleError(res, error);
+  }
+}
+
+export async function getPreviewAsistenciaRangoController(req: Request, res: Response) {
+  try {
+    const fechaInicio = typeof req.query.fecha_inicio === "string" ? req.query.fecha_inicio : "";
+    const fechaFin = typeof req.query.fecha_fin === "string" ? req.query.fecha_fin : "";
+    const periodicidadRaw = typeof req.query.periodicidad_pago === "string" ? req.query.periodicidad_pago : "SEMANAL";
+    const periodicidad_pago = periodicidadRaw === "MENSUAL" ? "MENSUAL" : "SEMANAL";
+
+    const rawIds = typeof req.query.trabajador_ids === "string" ? req.query.trabajador_ids : "";
+    const trabajador_ids = rawIds
+      ? rawIds.split(",").map((id) => id.trim()).filter((id) => id.length > 0)
+      : undefined;
+
+    res.json(await getPreviewAsistenciaRango({
+      fecha_inicio: fechaInicio,
+      fecha_fin: fechaFin,
+      periodicidad_pago,
+      trabajador_ids,
+    }));
+  } catch (error) {
+    handleError(res, error);
+  }
+}
+
+export async function postProcesoPagoSemanalController(req: AuthenticatedRequest, res: Response) {
+  try {
+    if (!req.user?.id) {
+      res.status(401).json({ message: "No autenticado" });
+      return;
+    }
+
+    res.status(201).json(await addProcesoPagoSemanal(req.body, req.user.id));
+  } catch (error) {
+    handleError(res, error);
+  }
+}
+
+export async function getProcesosPagoSemanalController(_req: Request, res: Response) {
+  try {
+    res.json(await getProcesosPagoSemanal());
   } catch (error) {
     handleError(res, error, 500);
   }

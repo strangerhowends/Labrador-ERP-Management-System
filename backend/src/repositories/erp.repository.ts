@@ -3,6 +3,9 @@ import type {
   BulkInsertResult,
   CategoriaInput,
   HorarioUpsertInput,
+  PreviewPagoSemanalItem,
+  ProcesoPagoSemanalInput,
+  ProcesoPagoSemanalResumenItem,
   ProductoBulkInput,
   ProductoBulkInsertResult,
   ProductoInput,
@@ -150,7 +153,7 @@ export async function deactivateProducto(id: string) {
 
 export async function listTrabajadores(activeOnly: boolean) {
   const result = await pool.query(
-    `SELECT id, nombre_completo, rol, dni, telefono, correo, activo, rol_acceso,
+    `SELECT id, nombre_completo, rol, dni, telefono, correo, periodicidad_pago, activo, rol_acceso,
             password_hash IS NOT NULL AS tiene_password
      FROM trabajadores
      ${activeOnly ? "WHERE activo = true" : ""}
@@ -161,10 +164,18 @@ export async function listTrabajadores(activeOnly: boolean) {
 
 export async function createTrabajador(input: TrabajadorInput) {
   const result = await pool.query(
-    `INSERT INTO trabajadores (nombre_completo, rol, dni, telefono, correo, activo)
-     VALUES ($1, $2, $3, $4, $5, COALESCE($6, true))
-     RETURNING id, nombre_completo, rol, dni, telefono, correo, activo`,
-    [input.nombre_completo, input.rol, input.dni, input.telefono ?? null, input.correo ?? null, input.activo ?? true]
+    `INSERT INTO trabajadores (nombre_completo, rol, dni, telefono, correo, periodicidad_pago, activo)
+     VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'SEMANAL'), COALESCE($7, true))
+     RETURNING id, nombre_completo, rol, dni, telefono, correo, periodicidad_pago, activo`,
+    [
+      input.nombre_completo,
+      input.rol,
+      input.dni,
+      input.telefono ?? null,
+      input.correo ?? null,
+      input.periodicidad_pago ?? "SEMANAL",
+      input.activo ?? true,
+    ]
   );
   return result.rows[0];
 }
@@ -177,10 +188,20 @@ export async function updateTrabajador(id: string, input: TrabajadorInput) {
          dni = $4,
          telefono = $5,
          correo = $6,
-         activo = COALESCE($7, activo)
+         periodicidad_pago = COALESCE($7, periodicidad_pago),
+         activo = COALESCE($8, activo)
      WHERE id = $1
-     RETURNING id, nombre_completo, rol, dni, telefono, correo, activo`,
-    [id, input.nombre_completo, input.rol, input.dni, input.telefono ?? null, input.correo ?? null, input.activo]
+     RETURNING id, nombre_completo, rol, dni, telefono, correo, periodicidad_pago, activo`,
+    [
+      id,
+      input.nombre_completo,
+      input.rol,
+      input.dni,
+      input.telefono ?? null,
+      input.correo ?? null,
+      input.periodicidad_pago,
+      input.activo,
+    ]
   );
   return result.rows[0] ?? null;
 }
@@ -401,6 +422,229 @@ export async function getHorariosByMonthForWorker(month: string, trabajadorId: s
   );
 
   return result.rows;
+}
+
+export async function getWeeklyPaymentPreview(
+  fechaInicioSemana: string,
+  trabajadorIds?: string[]
+): Promise<PreviewPagoSemanalItem[]> {
+  const filterByWorkers = Array.isArray(trabajadorIds) && trabajadorIds.length > 0;
+  const result = await pool.query<PreviewPagoSemanalItem>(
+    `SELECT
+      t.id AS trabajador_id,
+      t.nombre_completo AS trabajador_nombre,
+      d.fecha::date::text AS fecha,
+      EXISTS (
+        SELECT 1
+        FROM horarios_turnos h
+        WHERE h.trabajador_id = t.id
+          AND h.fecha = d.fecha::date
+      ) AS trabajo_programado
+    FROM trabajadores t
+    CROSS JOIN LATERAL (
+      SELECT generate_series($1::date, $1::date + INTERVAL '6 day', INTERVAL '1 day') AS fecha
+    ) d
+    WHERE t.activo = true
+      AND t.periodicidad_pago = 'SEMANAL'
+      ${filterByWorkers ? "AND t.id = ANY($2::uuid[])" : ""}
+    ORDER BY t.nombre_completo ASC, d.fecha ASC`,
+    filterByWorkers ? [fechaInicioSemana, trabajadorIds] : [fechaInicioSemana]
+  );
+
+  return result.rows;
+}
+
+export async function getAttendancePreviewByRange(
+  fechaInicio: string,
+  fechaFin: string,
+  periodicidadPago: "SEMANAL" | "MENSUAL",
+  trabajadorIds?: string[]
+): Promise<PreviewPagoSemanalItem[]> {
+  const filterByWorkers = Array.isArray(trabajadorIds) && trabajadorIds.length > 0;
+  const result = await pool.query<PreviewPagoSemanalItem>(
+    `SELECT
+      t.id AS trabajador_id,
+      t.nombre_completo AS trabajador_nombre,
+      d.fecha::date::text AS fecha,
+      EXISTS (
+        SELECT 1
+        FROM horarios_turnos h
+        WHERE h.trabajador_id = t.id
+          AND h.fecha = d.fecha::date
+      ) AS trabajo_programado
+    FROM trabajadores t
+    CROSS JOIN LATERAL (
+      SELECT generate_series($1::date, $2::date, INTERVAL '1 day') AS fecha
+    ) d
+    WHERE t.activo = true
+      AND t.periodicidad_pago = $3::periodicidad_pago_enum
+      ${filterByWorkers ? "AND t.id = ANY($4::uuid[])" : ""}
+    ORDER BY t.nombre_completo ASC, d.fecha ASC`,
+    filterByWorkers
+      ? [fechaInicio, fechaFin, periodicidadPago, trabajadorIds]
+      : [fechaInicio, fechaFin, periodicidadPago]
+  );
+
+  return result.rows;
+}
+
+export async function createProcesoPagoSemanal(
+  input: ProcesoPagoSemanalInput,
+  creadoPor: string
+) {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const procesoRes = await client.query<{ id: string }>(
+      `INSERT INTO procesos_pago_semanal (
+         anio_iso,
+         semana_iso,
+         fecha_inicio_semana,
+         fecha_fin_semana,
+         estado,
+         creado_por,
+         observaciones
+       ) VALUES ($1, $2, $3::date, $4::date, 'CERRADO', $5, $6)
+       RETURNING id`,
+      [
+        input.anio_iso,
+        input.semana_iso,
+        input.fecha_inicio_semana,
+        input.fecha_fin_semana,
+        creadoPor,
+        input.observaciones ?? null,
+      ]
+    );
+
+    const procesoId = procesoRes.rows[0].id;
+    let totalProcesoNeto = 0;
+
+    for (const trabajador of input.trabajadores) {
+      let totalBase = 0;
+      let totalExtra = 0;
+      let totalDescuento = 0;
+
+      for (const d of trabajador.detalles) {
+        totalBase += Number(d.pago_base_dia) || 0;
+        totalExtra += Number(d.extra_monto) || 0;
+        totalDescuento += Number(d.descuento_monto) || 0;
+      }
+
+      const totalNeto = Number((totalBase + totalExtra - totalDescuento).toFixed(2));
+
+      const trabajadorRes = await client.query<{ id: string }>(
+        `INSERT INTO proceso_pago_trabajador (
+           proceso_pago_id,
+           trabajador_id,
+           total_base,
+           total_extra,
+           total_descuento,
+           total_neto
+         ) VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id`,
+        [
+          procesoId,
+          trabajador.trabajador_id,
+          Number(totalBase.toFixed(2)),
+          Number(totalExtra.toFixed(2)),
+          Number(totalDescuento.toFixed(2)),
+          totalNeto,
+        ]
+      );
+
+      const procesoPagoTrabajadorId = trabajadorRes.rows[0].id;
+      totalProcesoNeto += totalNeto;
+
+      for (const d of trabajador.detalles) {
+        await client.query(
+          `INSERT INTO proceso_pago_detalle_dia (
+             proceso_pago_trabajador_id,
+             fecha,
+             trabajo_programado,
+             pago_base_dia,
+             extra_habilitado,
+             extra_monto,
+             extra_motivo,
+             descuento_habilitado,
+             descuento_monto,
+             descuento_motivo
+           ) VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [
+            procesoPagoTrabajadorId,
+            d.fecha,
+            d.trabajo_programado,
+            d.pago_base_dia,
+            d.extra_habilitado ?? false,
+            d.extra_monto ?? 0,
+            d.extra_motivo ?? null,
+            d.descuento_habilitado ?? false,
+            d.descuento_monto ?? 0,
+            d.descuento_motivo ?? null,
+          ]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO pagos_personal (
+           trabajador_id,
+           monto_pagado,
+           fecha_pago,
+           semana_del_anio,
+           tipo_pago,
+           observaciones,
+           proceso_pago_semanal_id
+         ) VALUES ($1, $2, $3::date, $4, 'Sueldo', $5, $6)`,
+        [
+          trabajador.trabajador_id,
+          totalNeto,
+          input.fecha_fin_semana,
+          input.semana_iso,
+          input.observaciones ?? `Proceso semanal ${input.anio_iso}-W${input.semana_iso}`,
+          procesoId,
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return {
+      proceso_id: procesoId,
+      anio_iso: input.anio_iso,
+      semana_iso: input.semana_iso,
+      total_neto: Number(totalProcesoNeto.toFixed(2)),
+      trabajadores_procesados: input.trabajadores.length,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function listProcesosPagoSemanal(): Promise<ProcesoPagoSemanalResumenItem[]> {
+  const result = await pool.query<ProcesoPagoSemanalResumenItem>(
+    `SELECT
+      p.id AS proceso_id,
+      p.anio_iso,
+      p.semana_iso,
+      p.fecha_inicio_semana::text AS fecha_inicio_semana,
+      p.fecha_fin_semana::text AS fecha_fin_semana,
+      p.estado,
+      p.observaciones,
+      COALESCE(SUM(t.total_neto), 0)::numeric(12,2) AS total_neto,
+      p.created_at::text AS created_at
+    FROM procesos_pago_semanal p
+    LEFT JOIN proceso_pago_trabajador t ON t.proceso_pago_id = p.id
+    GROUP BY p.id, p.anio_iso, p.semana_iso, p.fecha_inicio_semana, p.fecha_fin_semana, p.estado, p.observaciones, p.created_at
+    ORDER BY p.anio_iso DESC, p.semana_iso DESC, p.created_at DESC`
+  );
+
+  return result.rows.map((row) => ({
+    ...row,
+    total_neto: Number(row.total_neto),
+  }));
 }
 
 function normalizeName(value: string) {

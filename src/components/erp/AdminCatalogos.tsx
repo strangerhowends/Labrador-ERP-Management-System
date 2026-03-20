@@ -6,6 +6,7 @@ import {
   API_URL,
   type Categoria,
   type CategoriaTipo,
+  type PeriodicidadPago,
   type Producto,
   type Proveedor,
   type RolAcceso,
@@ -68,13 +69,14 @@ export function AdminCatalogos() {
     tipo: "Insumo",
   });
   const [productoForm, setProductoForm] = useState({ id: "", nombre: "", categoria_id: "" });
-  const [trabajadorForm, setTrabajadorForm] = useState<{ id: string; nombre_completo: string; rol: TrabajadorRol; dni: string; telefono: string; correo: string }>({
+  const [trabajadorForm, setTrabajadorForm] = useState<{ id: string; nombre_completo: string; rol: TrabajadorRol; dni: string; telefono: string; correo: string; periodicidad_pago: PeriodicidadPago }>({
     id: "",
     nombre_completo: "",
     rol: "Cocina",
     dni: "",
     telefono: "",
     correo: "",
+    periodicidad_pago: "SEMANAL",
   });
 
   const [importingTab, setImportingTab] = useState<TabKey | null>(null);
@@ -261,6 +263,7 @@ export function AdminCatalogos() {
         dni: trabajadorForm.dni,
         telefono: trabajadorForm.telefono || null,
         correo: trabajadorForm.correo || null,
+        periodicidad_pago: trabajadorForm.periodicidad_pago,
       }),
     });
 
@@ -273,7 +276,7 @@ export function AdminCatalogos() {
     }
 
     setTabFeedback("trabajadores", { success: isEdit ? "Trabajador actualizado" : "Trabajador creado" });
-    setTrabajadorForm({ id: "", nombre_completo: "", rol: "Cocina", dni: "", telefono: "", correo: "" });
+    setTrabajadorForm({ id: "", nombre_completo: "", rol: "Cocina", dni: "", telefono: "", correo: "", periodicidad_pago: "SEMANAL" });
     setAccessPassword("");
     setAccessConfirm("");
     setShowPassword(false);
@@ -708,6 +711,19 @@ export function AdminCatalogos() {
                   type="email"
                 />
               </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="text-sm">
+                  <span className="mb-1 block font-medium text-ink-700">Periodicidad de Pago</span>
+                  <select
+                    value={trabajadorForm.periodicidad_pago}
+                    onChange={(e) => setTrabajadorForm((p) => ({ ...p, periodicidad_pago: e.target.value as PeriodicidadPago }))}
+                    className="w-full rounded-xl border border-sand-200 bg-white px-3 py-2 text-ink-900"
+                  >
+                    <option value="SEMANAL">Semanal</option>
+                    <option value="MENSUAL">Mensual</option>
+                  </select>
+                </label>
+              </div>
 
               {/* ── Acceso al Sistema (solo al editar) ── */}
               {trabajadorForm.id && (
@@ -795,7 +811,7 @@ export function AdminCatalogos() {
 
               <div className="flex flex-wrap gap-2">
                 <ActionButton onClick={saveTrabajador}>{trabajadorForm.id ? "Actualizar" : "Crear"}</ActionButton>
-                <GhostButton onClick={() => { setTrabajadorForm({ id: "", nombre_completo: "", rol: "Cocina", dni: "", telefono: "", correo: "" }); setAccessPassword(""); setAccessConfirm(""); setShowPassword(false); setAccessRol("TRABAJADOR"); }}>Limpiar</GhostButton>
+                <GhostButton onClick={() => { setTrabajadorForm({ id: "", nombre_completo: "", rol: "Cocina", dni: "", telefono: "", correo: "", periodicidad_pago: "SEMANAL" }); setAccessPassword(""); setAccessConfirm(""); setShowPassword(false); setAccessRol("TRABAJADOR"); }}>Limpiar</GhostButton>
                 <GhostButton onClick={() => openCsvPicker("trabajadores")}>Importar CSV</GhostButton>
               </div>
               <TableWrap loading={loading}>
@@ -805,6 +821,7 @@ export function AdminCatalogos() {
                       <Th>Nombre</Th>
                       <Th>DNI</Th>
                       <Th>Rol</Th>
+                      <Th>Periodicidad</Th>
                       <Th>Acceso</Th>
                       <Th>Telefono</Th>
                       <Th>Correo</Th>
@@ -818,6 +835,7 @@ export function AdminCatalogos() {
                         <Td>{item.nombre_completo}</Td>
                         <Td>{item.dni}</Td>
                         <Td>{item.rol}</Td>
+                        <Td>{item.periodicidad_pago}</Td>
                         <Td>
                           <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
                             item.rol_acceso === "ADMIN"
@@ -844,6 +862,7 @@ export function AdminCatalogos() {
                                   dni: item.dni,
                                   telefono: item.telefono ?? "",
                                   correo: item.correo ?? "",
+                                  periodicidad_pago: item.periodicidad_pago,
                                 });
                                 setAccessRol(item.rol_acceso);
                                 setAccessPassword("");

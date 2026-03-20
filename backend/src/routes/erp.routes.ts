@@ -2,6 +2,9 @@ import { Router } from "express";
 import {
   getCategoriasController,
   getHorariosController,
+  getPreviewProcesoPagoSemanalController,
+  getPreviewAsistenciaRangoController,
+  getProcesosPagoSemanalController,
   getProductosController,
   getProveedoresController,
   getRemuneracionesSemanalController,
@@ -12,6 +15,7 @@ import {
   patchTrabajadorController,
   postCategoriaBulkController,
   postCategoriaController,
+  postProcesoPagoSemanalController,
   postProductoBulkController,
   postProductoController,
   postProveedorBulkController,
@@ -66,6 +70,10 @@ erpRouter.put("/remuneraciones/:id", authorize("ADMIN"), putRemuneracionControll
 erpRouter.delete("/remuneraciones/:id", authorize("ADMIN"), deleteRemuneracionController);
 // Remuneraciones semanal: ADMIN sees all, TRABAJADOR sees own
 erpRouter.get("/remuneraciones/semanal", getRemuneracionesSemanalController);
+erpRouter.get("/remuneraciones/proceso-semanal/preview", authorize("ADMIN"), getPreviewProcesoPagoSemanalController);
+erpRouter.get("/remuneraciones/asistencia-preview", authorize("ADMIN"), getPreviewAsistenciaRangoController);
+erpRouter.post("/remuneraciones/proceso-semanal", authorize("ADMIN"), postProcesoPagoSemanalController);
+erpRouter.get("/remuneraciones/proceso-semanal", authorize("ADMIN"), getProcesosPagoSemanalController);
 
 // Horarios: both roles can read, only ADMIN can write
 erpRouter.get("/horarios", getHorariosController);
