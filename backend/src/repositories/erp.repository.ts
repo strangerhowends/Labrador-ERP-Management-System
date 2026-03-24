@@ -165,7 +165,7 @@ export async function listTrabajadores(activeOnly: boolean) {
 export async function createTrabajador(input: TrabajadorInput) {
   const result = await pool.query(
     `INSERT INTO trabajadores (nombre_completo, rol, dni, telefono, correo, periodicidad_pago, activo)
-     VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'SEMANAL'), COALESCE($7, true))
+     VALUES ($1, $2, $3, $4, $5, COALESCE($6::periodicidad_pago_enum, 'SEMANAL'::periodicidad_pago_enum), COALESCE($7, true))
      RETURNING id, nombre_completo, rol, dni, telefono, correo, periodicidad_pago, activo`,
     [
       input.nombre_completo,
@@ -188,7 +188,7 @@ export async function updateTrabajador(id: string, input: TrabajadorInput) {
          dni = $4,
          telefono = $5,
          correo = $6,
-         periodicidad_pago = COALESCE($7, periodicidad_pago),
+         periodicidad_pago = COALESCE($7::periodicidad_pago_enum, periodicidad_pago),
          activo = COALESCE($8, activo)
      WHERE id = $1
      RETURNING id, nombre_completo, rol, dni, telefono, correo, periodicidad_pago, activo`,
@@ -790,8 +790,8 @@ export async function bulkCreateTrabajadores(items: Array<{ nombre_completo: str
     }
 
     await pool.query(
-      `INSERT INTO trabajadores (nombre_completo, rol, dni, telefono, correo, activo)
-       VALUES ($1, $2::trabajador_rol_enum, $3, $4, $5, true)`,
+      `INSERT INTO trabajadores (nombre_completo, rol, dni, telefono, correo, periodicidad_pago, activo)
+       VALUES ($1, $2::trabajador_rol_enum, $3, $4, $5, 'SEMANAL'::periodicidad_pago_enum, true)`,
       [row.nombre_completo, row.rol, row.dni || null, row.telefono, row.correo]
     );
     inserted += 1;
